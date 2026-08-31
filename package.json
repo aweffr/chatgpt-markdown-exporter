@@ -1,0 +1,23 @@
+{
+  "name": "chatgpt-markdown-exporter",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "build:e2e": "EXPORTER_E2E=1 tsx scripts/build.ts && tsx scripts/write-playwright-config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "fixture": "tsx tests/e2e/fixture-server.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.1",
+    "@types/node": "^24.3.0",
+    "esbuild": "^0.25.9",
+    "jsdom": "^26.1.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

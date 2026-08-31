@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-e2e/
+.playwright-cli/
+.playwright/
+.playwright-profile/
+test-results/
+downloads/
