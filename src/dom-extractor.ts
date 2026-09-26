@@ -1,5 +1,10 @@
 import { createCitationToken } from "./markdown";
-import { allMatches, SELECTORS } from "./selectors";
+import {
+  allMatches,
+  pageMessages,
+  SELECTORS,
+  type PageMessage,
+} from "./selectors";
 import type {
   CitationSource,
   ExportMessage,
@@ -109,7 +114,10 @@ function citationFrom(element: Element): CitationSource | null {
       : element.querySelector<HTMLAnchorElement>("a[href]");
   if (!anchor) return null;
   const url = anchor.href;
+  const label = compactText(anchor.getAttribute("aria-label") ?? "");
+  const urlStart = label.indexOf(", http");
   const title =
+    (urlStart >= 0 ? label.slice(0, urlStart) : "") ||
     compactText(anchor.textContent ?? "") ||
     compactText(anchor.getAttribute("aria-label") ?? "") ||
     compactText(anchor.getAttribute("title") ?? "");
@@ -118,6 +126,15 @@ function citationFrom(element: Element): CitationSource | null {
 
 function convertElement(element: Element, context: ConversionContext): string {
   if (isElementHidden(element)) return "";
+  if (element.matches('[data-markdown-copy="exclude"]')) return "";
+  if (element.matches(SELECTORS.fileCitation)) {
+    const name = compactText(
+      element.getAttribute("aria-label") ?? element.textContent ?? "",
+    )
+      .replace(/^打开 (.*) 的预览$/u, "$1")
+      .replace(/^Open (.*) preview$/iu, "$1");
+    return name ? `[附件：${name}]` : "";
+  }
   if (element.matches(SELECTORS.citation)) {
     const citation = citationFrom(element);
     if (!citation) return convertChildren(element, context);
@@ -126,7 +143,18 @@ function convertElement(element: Element, context: ConversionContext): string {
   }
 
   const tag = element.tagName;
-  if (["SCRIPT", "STYLE", "SVG", "BUTTON", "NOSCRIPT"].includes(tag)) return "";
+  if (tag === "PRE" || element.matches('[data-markdown-copy="code-block"]')) {
+    const code = element.querySelector("code") ?? element;
+    const source = (code.textContent ?? "").replace(/\n+$/u, "");
+    const fence = source.includes("```") ? "````" : "```";
+    return `\n\n${fence}${languageFor(code)}\n${source}\n${fence}\n\n`;
+  }
+  if (tag === "BUTTON") {
+    return [...element.querySelectorAll("img")]
+      .map((image) => convertElement(image, context))
+      .join("\n\n");
+  }
+  if (["SCRIPT", "STYLE", "SVG", "NOSCRIPT"].includes(tag)) return "";
   if (tag === "BR") return "\n";
   if (tag === "HR") return "\n\n---\n\n";
   if (tag === "IMG") {
@@ -151,12 +179,6 @@ function convertElement(element: Element, context: ConversionContext): string {
     const value = element.textContent ?? "";
     const fence = value.includes("`") ? "``" : "`";
     return `${fence}${value}${fence}`;
-  }
-  if (tag === "PRE") {
-    const code = element.querySelector("code") ?? element;
-    const source = (code.textContent ?? "").replace(/\n+$/u, "");
-    const fence = source.includes("```") ? "````" : "```";
-    return `\n\n${fence}${languageFor(code)}\n${source}\n${fence}\n\n`;
   }
   if (/^H[1-6]$/u.test(tag)) {
     const level = Number(tag.slice(1));
@@ -262,7 +284,10 @@ function visibleText(
 
 function contentRoot(message: Element, role: "user" | "assistant"): Element {
   if (role === "assistant")
-    return message.querySelector(".markdown") ?? message;
+    return (
+      message.querySelector('[data-markdown-text-style="assistant-message"]') ??
+      message
+    );
   return (
     message.querySelector(".whitespace-pre-wrap") ??
     message.querySelector('[class*="whitespace-pre-wrap"]') ??
@@ -270,14 +295,12 @@ function contentRoot(message: Element, role: "user" | "assistant"): Element {
   );
 }
 
-function extractMessage(element: Element): ExportMessage | null {
-  const id = element.getAttribute("data-message-id");
-  const role = element.getAttribute("data-message-author-role");
-  if (
-    !id ||
-    (role !== "user" && role !== "assistant") ||
-    isElementHidden(element)
-  ) {
+function extractMessage({
+  id,
+  role,
+  element,
+}: PageMessage): ExportMessage | null {
+  if (isElementHidden(element)) {
     return null;
   }
 
@@ -296,6 +319,12 @@ function extractMessage(element: Element): ExportMessage | null {
   };
   const main = normalizeBlocks(convertChildren(root, context));
   const preamble: string[] = [];
+  if (role === "user") {
+    for (const card of element.querySelectorAll(SELECTORS.attachment)) {
+      const name = compactText(card.getAttribute("aria-label") ?? "");
+      if (name) preamble.push(`[附件：${name}]`);
+    }
+  }
   const targetedReply = visibleText(element, SELECTORS.targetedReply);
   if (targetedReply) preamble.push(blockquote(targetedReply));
   const reasoning = visibleText(element, SELECTORS.reasoningSummary);
@@ -328,7 +357,7 @@ function conversationTitle(documentNode: Document): string {
 export function extractVisibleConversation(
   documentNode: Document,
 ): ExtractedConversation {
-  const messages = allMatches(documentNode, SELECTORS.messages)
+  const messages = pageMessages(documentNode)
     .map(extractMessage)
     .filter((message): message is ExportMessage => message !== null);
   return { title: conversationTitle(documentNode), messages };
@@ -339,17 +368,9 @@ export function visibleBranchHints(documentNode: Document): {
   visibleTurnIds: string[];
 } {
   return {
-    visibleMessageIds: allMatches(documentNode, SELECTORS.messages)
-      .map((element) => element.getAttribute("data-message-id"))
-      .filter((id): id is string => Boolean(id)),
+    visibleMessageIds: pageMessages(documentNode).map(({ id }) => id),
     visibleTurnIds: allMatches(documentNode, SELECTORS.turns)
-      .map(
-        (element) =>
-          element.getAttribute("data-turn-id") ??
-          element
-            .getAttribute("data-testid")
-            ?.replace("conversation-turn-", ""),
-      )
+      .map((element) => element.getAttribute("data-turn-key"))
       .filter((id): id is string => Boolean(id)),
   };
 }

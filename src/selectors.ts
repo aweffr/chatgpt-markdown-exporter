@@ -1,12 +1,10 @@
 export const SELECTORS = {
-  messages: [
-    "div[data-message-id]",
-    "[data-message-id][data-message-author-role]",
-  ],
-  turns: ["section[data-turn-id]", '[data-testid^="conversation-turn-"]'],
-  composer: ["form > div:has(textarea)", '[data-testid="composer-plus-btn"]'],
-  domMessageContainers: ["div.group\\/turn-messages"],
-  citation: '[data-testid="webpage-citation-pill"]',
+  messages: ["[data-chatgpt-search-message-ids]"],
+  turns: ["[data-turn-key]"],
+  composer: ["form[data-chatgpt-composer] [data-composer-surface-variant]"],
+  citation: '[data-testid="chatgpt-citation"]',
+  fileCitation: '[data-testid="chatgpt-library-file-citation"]',
+  attachment: "button.peer\\/resource-card[aria-label]",
   generating: [
     '[data-testid="stop-button"]',
     'button[aria-label*="Stop"]',
@@ -26,6 +24,32 @@ export const SELECTORS = {
     '[data-content-type="thought-process"]',
   ],
 } as const;
+
+export interface PageMessage {
+  id: string;
+  role: "user" | "assistant";
+  element: Element;
+}
+
+// Search units can list tool IDs and duplicate answer IDs. The selection
+// target identifies the rendered answer; user units carry their own ID.
+export function pageMessages(root: ParentNode): PageMessage[] {
+  return allMatches(root, SELECTORS.messages).flatMap((unit): PageMessage[] => {
+    const answer = unit.querySelector("[data-chatgpt-selection-message-id]");
+    const role = answer
+      ? "assistant"
+      : unit.querySelector("[data-user-message-bubble]")
+        ? "user"
+        : null;
+    const id =
+      answer?.getAttribute("data-chatgpt-selection-message-id") ??
+      unit
+        .getAttribute("data-chatgpt-search-message-ids")
+        ?.trim()
+        .split(/\s+/u)[0];
+    return id && role ? [{ id, role, element: unit }] : [];
+  });
+}
 
 export function firstMatch(
   root: ParentNode,

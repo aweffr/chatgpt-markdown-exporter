@@ -5,7 +5,7 @@ import {
 } from "./conversation-client";
 import { createDownloadRequest, type DownloadResponse } from "./download";
 import { renderMarkdown } from "./markdown";
-import { allMatches, firstMatch, SELECTORS } from "./selectors";
+import { firstMatch, pageMessages, SELECTORS } from "./selectors";
 import { SelectionState } from "./selection-state";
 import type { ExportMessage, ExtractedConversation } from "./types";
 
@@ -80,16 +80,9 @@ function createShadowHost(kind: string): {
 }
 
 function currentMessageElements(): Map<string, Element> {
-  const entries = allMatches(document, SELECTORS.messages)
-    .filter((element) => {
-      const role = element.getAttribute("data-message-author-role");
-      return role === "user" || role === "assistant";
-    })
-    .map(
-      (element) => [element.getAttribute("data-message-id"), element] as const,
-    )
-    .filter((entry): entry is readonly [string, Element] => Boolean(entry[0]));
-  return new Map(entries);
+  return new Map(
+    pageMessages(document).map(({ id, element }) => [id, element]),
+  );
 }
 
 async function downloadMarkdown(
@@ -165,15 +158,8 @@ class ExporterApp {
   }
 
   private composerContainer(): HTMLElement | null {
-    for (const selector of SELECTORS.composer) {
-      const match = document.querySelector(selector);
-      if (!(match instanceof HTMLElement)) continue;
-      if (selector.includes("composer-plus-btn")) {
-        return match.parentElement ?? match;
-      }
-      return match;
-    }
-    return null;
+    const match = firstMatch(document, SELECTORS.composer);
+    return match instanceof HTMLElement ? match : null;
   }
 
   private mountExportButton(): void {

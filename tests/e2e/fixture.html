@@ -32,16 +32,16 @@
       section {
         margin: 22px 0;
       }
-      [data-message-id] {
+      [data-chatgpt-search-message-ids] {
         position: relative;
         padding: 18px;
         border-radius: 16px;
         background: color-mix(in srgb, CanvasText 6%, Canvas);
       }
-      [data-message-author-role="user"] {
+      [data-chatgpt-search-unit-key="turn:user"] {
         margin-inline-start: 15%;
       }
-      .markdown {
+      [data-markdown-text-style] {
         line-height: 1.6;
       }
       table {
@@ -89,7 +89,7 @@
         display: flex;
         align-items: center;
       }
-      textarea {
+      [contenteditable] {
         flex: 1;
         min-height: 42px;
         resize: none;
@@ -104,27 +104,35 @@
       <button type="button" id="generating">模拟正在生成</button>
     </header>
     <main id="conversation">
-      <section data-turn-id="user-1" data-testid="conversation-turn-user-1">
+      <section data-turn-key="user-1" data-testid="conversation-turn-user-1">
         <div class="group/turn-messages">
-          <div data-message-id="user-1" data-message-author-role="user">
-            <div class="whitespace-pre-wrap">请只导出我需要的消息。</div>
+          <div
+            data-chatgpt-search-message-ids="user-1"
+            data-chatgpt-search-unit-key="turn:user"
+          >
+            <div data-user-message-bubble class="whitespace-pre-wrap">
+              请只导出我需要的消息。
+            </div>
           </div>
         </div>
       </section>
       <section
-        data-turn-id="assistant-1"
+        data-turn-key="assistant-1"
         data-testid="conversation-turn-assistant-1"
       >
         <div class="group/turn-messages">
           <div
-            data-message-id="assistant-1"
-            data-message-author-role="assistant"
+            data-chatgpt-search-message-ids="assistant-1"
+            data-chatgpt-search-unit-key="turn:assistant"
             data-message-model-slug="gpt-5-6-thinking"
           >
-            <div class="markdown">
+            <div
+              data-chatgpt-selection-message-id="assistant-1"
+              data-markdown-text-style="assistant-message"
+            >
               <p>
                 第一条回答引用了
-                <span data-testid="webpage-citation-pill"
+                <span data-testid="chatgpt-citation"
                   ><a href="https://example.com/source?utm_source=chatgpt.com"
                     >示例来源</a
                   ></span
@@ -134,26 +142,41 @@
           </div>
         </div>
       </section>
-      <section data-turn-id="user-2" data-testid="conversation-turn-user-2">
+      <section data-turn-key="user-2" data-testid="conversation-turn-user-2">
         <div class="group/turn-messages">
-          <div data-message-id="user-2" data-message-author-role="user">
-            <div class="whitespace-pre-wrap">给我代码和表格。</div>
+          <div
+            data-chatgpt-search-message-ids="user-2"
+            data-chatgpt-search-unit-key="turn:user"
+          >
+            <div data-user-message-bubble class="whitespace-pre-wrap">
+              给我代码和表格。
+            </div>
           </div>
         </div>
       </section>
       <section
-        data-turn-id="assistant-2"
+        data-turn-key="assistant-2"
         data-testid="conversation-turn-assistant-2"
       >
         <div class="group/turn-messages">
           <div
-            data-message-id="assistant-2"
-            data-message-author-role="assistant"
+            data-chatgpt-search-message-ids="assistant-2"
+            data-chatgpt-search-unit-key="turn:assistant"
             data-message-model-slug="gpt-5-6-thinking"
           >
-            <div class="markdown">
+            <div
+              data-chatgpt-selection-message-id="assistant-2"
+              data-markdown-text-style="assistant-message"
+            >
               <p>这是最终答案。</p>
-              <pre><code class="language-ts">const answer: number = 42;</code></pre>
+              <div data-markdown-copy="code-block">
+                <div data-markdown-copy="exclude">
+                  TypeScript<button type="button">复制代码</button>
+                </div>
+                <div>
+                  <code class="language-ts">const answer: number = 42;</code>
+                </div>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -168,28 +191,31 @@
                   </tr>
                 </tbody>
               </table>
-              <p><img alt="示意图" src="/image.png" /></p>
+              <p>
+                <button type="button" aria-label="打开图像">
+                  <img alt="示意图" src="/image.png" />
+                </button>
+              </p>
               <p><a href="https://example.com/report.pdf">报告附件</a></p>
             </div>
           </div>
         </div>
       </section>
     </main>
-    <form>
-      <div class="composer-shell">
+    <form data-chatgpt-composer>
+      <div class="composer-shell" data-composer-surface-variant="default">
         <div class="composer-surface">
           <div class="composer-grid">
             <div class="composer-leading">
-              <button
-                type="button"
-                data-testid="composer-plus-btn"
-                aria-label="添加附件"
-              >
-                +
-              </button>
+              <button type="button" aria-label="添加附件">+</button>
             </div>
             <div class="composer-primary">
-              <textarea aria-label="消息输入框"></textarea>
+              <div
+                contenteditable="true"
+                role="textbox"
+                data-composer-markdown
+                aria-label="消息输入框"
+              ></div>
             </div>
             <div class="composer-trailing">
               <button type="button" aria-label="启动语音功能">◉</button>

@@ -124,8 +124,8 @@ Source modules are bundled into the files loaded by Chrome.
 - Fetch structured conversation data.
 - Accept either a direct `{ mapping, current_node }` payload or the same shape
   under `.data`. Other response shapes fail explicitly.
-- Determine the active branch from the last visible `data-message-id` present in
-  `mapping`, then from the last visible `data-turn-id`. Follow the matched
+- Determine the active branch from the last visible normalized message ID
+  present in `mapping`, then from the last visible `data-turn-key`. Follow the matched
   node's last-child chain to its leaf. Use `current_node` only when neither DOM
   identifier matches.
 - Follow `leaf -> parent` and reverse the result to reconstruct the active
@@ -140,8 +140,8 @@ Source modules are bundled into the files loaded by Chrome.
 
 ### Selection controller
 
-- Match structured messages to currently rendered elements using
-  `data-message-id`.
+- Match structured messages to currently rendered elements using the normalized
+  IDs from the shared page-message reader.
 - Include every exportable message on the active branch, whether or not its DOM
   element is currently mounted.
 - Maintain selected message IDs independently of DOM positions or text.
@@ -239,18 +239,23 @@ Rules:
 
 ## 8. DOM Integration
 
-The selector fallback chains combine the installed extension's selectors with
-the supplied real HTML samples:
+The current page integration uses semantic data attributes:
 
-- Message identity, in order: `div[data-message-id]`, then
-  `[data-message-id][data-message-author-role]`
+- Message units: `[data-chatgpt-search-message-ids]`
+- User identity: the unit's message ID and `[data-user-message-bubble]`
+- Assistant identity: the nested `[data-chatgpt-selection-message-id]`, rather
+  than the unit's potentially duplicated list of answer and tool IDs
+- Assistant body: `[data-markdown-text-style="assistant-message"]`
 - Model fallback: `data-message-model-slug`
-- Conversation turns, in order: `section[data-turn-id]`, then
-  `[data-testid^="conversation-turn-"]`
-- Composer container, in order: `form > div:has(textarea)`, then the closest
-  composer container of `[data-testid="composer-plus-btn"]`
-- DOM-mode message containers: `div.group\/turn-messages`
-- Citation fallback: `data-testid="webpage-citation-pill"`
+- Conversation turns: `[data-turn-key]`
+- Composer: `form[data-chatgpt-composer] [data-composer-surface-variant]`
+- Citations: `[data-testid="chatgpt-citation"]`; the accessible label provides
+  the full source title, while `href` provides the URL
+- Code blocks: `[data-markdown-copy="code-block"] code`
+- Exclude controls marked `[data-markdown-copy="exclude"]`; retain image links
+  even when the preview image is wrapped in a button
+- Retain uploaded resource-card filenames and library-file citation names as
+  attachment labels when the DOM provides no download URL
 
 Selectors must be centralized. The extension will not fetch selector
 configuration remotely. The button is absolutely positioned immediately to the

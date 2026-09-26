@@ -1,6 +1,7 @@
 # ChatGPT Markdown 导出器
 
-一个完全本地运行的 Chrome Manifest V3 扩展。它在当前 ChatGPT 对话中提供逐条选择功能，并把所选消息下载为 Markdown 文件。
+一个完全本地运行的 Chrome Manifest V3 扩展。
+它在当前 ChatGPT 对话中提供逐条选择功能，并把所选消息下载为 Markdown 文件。
 
 ## 本地安装
 
@@ -9,7 +10,8 @@ npm install
 npm run build
 ```
 
-然后打开 `chrome://extensions`，启用“开发者模式”，选择“加载已解压的扩展程序”，并选择本项目的 `dist` 目录。
+然后打开 `chrome://extensions`，启用“开发者模式”，
+选择“加载已解压的扩展程序”，并选择本项目的 `dist` 目录。
 
 ## 使用
 

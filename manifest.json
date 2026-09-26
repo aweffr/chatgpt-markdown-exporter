@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Markdown 导出器",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "逐条选择当前 ChatGPT 对话中的消息，并导出为 Markdown 文件。",
   "permissions": ["downloads"],
   "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
