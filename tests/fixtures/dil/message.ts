@@ -75,6 +75,31 @@ export function dilNode(
 export const chartMarker =
   '\uE200genui\uE202{"charts_widget_v2":{"fixture":true}}\uE201';
 
+export const imageGroupMarker =
+  '\uE200image_group\uE202{"query":["industrial storage"],"layout":"carousel","num_per_query":1}\uE201';
+
+export function unsupportedDilNode(): ConversationNode {
+  const node = dilNode(
+    `Before${cite("turn0search0")}\n\n${imageGroupMarker}\n\nAfter${cite("turn0search1")}`,
+  );
+  const dil = node.message!.metadata!.model_dil_v2 as {
+    appData: { opGenui: { componentResults: Record<string, unknown> } };
+  };
+  dil.appData.opGenui.componentResults["photo-component"] = {
+    status: "resolved",
+    componentName: "AsyncImage",
+    state: {
+      images: [{
+        title: "Storage tanks",
+        url: "https://example.com/storage",
+        content_url: "https://example.com/full-image.png",
+        original_content_url: "https://example.com/original.jpg",
+      }],
+    },
+  };
+  return node;
+}
+
 export function richDilNode(): ConversationNode {
   const svg =
     '<svg><title>Comparison</title><desc>Two values</desc><rect width="10"/><text>A: 0%</text><text>B: -2%</text></svg>';

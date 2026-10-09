@@ -203,19 +203,14 @@ async (page) => {
   )
 
   await open("/c/dil-invalid")
+  await select()
+  const rawWidget = await download("unconverted-widget")
+  assert(
+    rawWidget.includes("原始组件：genui") &&
+      rawWidget.includes('"charts_widget_v2"') && rawWidget.includes("Body[^"),
+    "Unconverted widget preserves raw data without blocking the rest of the conversation",
+  )
   const lastSuccessfulFile = await latestFilename()
-  await entry().click()
-  await page
-    .getByText("无法完整导出此回答：缺少图表数据", { exact: true })
-    .waitFor({ state: "visible" })
-  assert(
-    (await page.getByRole("toolbar").count()) === 0,
-    "Failed conversion must not enter selection mode",
-  )
-  assert(
-    (await latestFilename()) === lastSuccessfulFile,
-    "Failed conversion must not download partial content",
-  )
 
   await open("/c/api-fail")
   await entry().click()

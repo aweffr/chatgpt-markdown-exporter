@@ -179,8 +179,11 @@ Source modules are bundled into the files loaded by Chrome.
   whitespace and camelCase attributes, so do not compare raw strings.
   Raw JSX label discovery accepts expression attributes; fallback SVG parsing
   remains strict. Textless SVG fences stay literal, never match an empty label.
-- Never execute DIL code. Missing required body, source or chart data fails
-  explicitly rather than yielding a known-incomplete download.
+- Never execute DIL code. Unknown components and unconvertible widgets retain
+  their type, original arguments and available widget references as literal
+  JSON in place. Append other component API results once per affected message;
+  do not infer component pairing from record order or DOM mounting.
+- Missing required body or citation source data still fails explicitly.
 - Accept only the selected, ordered messages.
 - Render deterministic Markdown with no network activity.
 - Re-number and deduplicate citations after message filtering.

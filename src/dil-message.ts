@@ -30,7 +30,7 @@ interface ChartData {
 }
 interface WidgetReference {
   matched_text: string;
-  data: { widget_type: string; content: ChartData };
+  data: { widget_type: string; content: unknown };
 }
 
 // Markdown examples must stay literal, including control markers and TeX.
@@ -145,6 +145,24 @@ function svgLabels(parsed: Document): string {
     .join("\n");
 }
 
+function rawJson(value: unknown): string {
+  // Keep DIL delimiters literal in JSON instead of letting later conversion
+  // or Markdown rendering interpret them as component markers.
+  const json = JSON.stringify(value, null, 2).replace(
+    /[\uE200-\uE202]/gu,
+    (character) => `\\u${character.charCodeAt(0).toString(16)}`,
+  );
+  return `\`\`\`json\n${json}\n\`\`\``;
+}
+
+function rawArgument(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}
+
 export class DilConversionError extends Error {
   constructor(reason: string) {
     super(`无法完整导出此回答：${reason}`);
@@ -176,9 +194,10 @@ export function dilMarkdown(
     }
     return prose;
   });
-  const components = Object.values(
-    dil.appData?.opGenui?.componentResults ?? {},
-  ).filter((component) => component.status === "resolved");
+  const componentResults = dil.appData?.opGenui?.componentResults ?? {};
+  const components = Object.values(componentResults).filter(
+    (component) => component.status === "resolved",
+  );
   const sources = new Map(
     components
       .filter((c) => c.componentName === "Cite")
@@ -197,11 +216,25 @@ export function dilMarkdown(
       (reference) => [reference.matched_text, reference],
     ),
   );
-  const markdown = transformProse(
+  let preservedRawComponent = false;
+  const preserveComponent = (
+    type: string,
+    refs: string[],
+    reference?: WidgetReference,
+  ): string => {
+    preservedRawComponent = true;
+    return `\n\n原始组件：${type}\n\n${rawJson({
+      type,
+      arguments: refs.map(rawArgument),
+      ...(reference ? { reference } : {}),
+    })}\n\n`;
+  };
+  const withComponents = transformProse(
     dil.fallbackMarkdown,
     (prose) =>
-      prose
-        .replace(/\uE200([^\uE201]*)\uE201/gu, (marker, fields: string) => {
+      prose.replace(
+        /\uE200([^\uE201]*)\uE201/gu,
+        (marker, fields: string) => {
           const [kind, ...refs] = fields.split("\uE202");
           if (kind === "cite")
             return refs
@@ -232,17 +265,29 @@ export function dilMarkdown(
           }
           if (kind === "genui") {
             const reference = widgets.get(marker);
-            if (reference?.data?.widget_type !== "charts_widget_v2")
-              throw new DilConversionError("缺少图表数据");
-            return chartMarkdown(reference.data.content);
+            if (reference?.data?.widget_type === "charts_widget_v2") {
+              try {
+                return chartMarkdown(reference.data.content as ChartData);
+              } catch (error) {
+                if (!(error instanceof DilConversionError)) throw error;
+              }
+            }
+            return preserveComponent(kind, refs, reference);
           }
           if (kind === "entity") {
             const entity = JSON.parse(refs[0]!) as [string, string];
             return entity[1];
           }
           if (kind === "url") return `[${refs[0]}](${refs[1]})`;
-          throw new DilConversionError("组件内容尚未支持");
-        })
+          return preserveComponent(kind!, refs, widgets.get(marker));
+        },
+      ),
+  );
+  // A second prose pass protects newly inserted raw JSON just like user code.
+  const markdown = transformProse(
+    withComponents,
+    (prose) =>
+      prose
         .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/giu, svgText)
         .replace(
           /\\\[([\s\S]*?)\\\]/gu,
@@ -259,5 +304,19 @@ export function dilMarkdown(
       return renderedFigures.has(text) ? text : undefined;
     },
   );
-  return { markdown, citations };
+  const rawComponents = preservedRawComponent
+    ? Object.fromEntries(
+        Object.entries(componentResults).filter(
+          ([, component]) =>
+            !["Cite", "FileCite"].includes(component.componentName),
+        ),
+      )
+    : {};
+  const appendix = Object.keys(rawComponents).length
+    ? `<details>\n<summary>组件原始数据</summary>\n\n${rawJson(rawComponents)}\n\n</details>`
+    : "";
+  return {
+    markdown: [markdown, appendix].filter(Boolean).join("\n\n"),
+    citations,
+  };
 }

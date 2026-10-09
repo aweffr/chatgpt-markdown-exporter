@@ -9,9 +9,69 @@ import {
   dilNode,
   filecite,
   richDilNode,
+  imageGroupMarker,
+  unsupportedDilNode,
 } from "../fixtures/dil/message";
 
 describe("DIL message export", () => {
+  it("supports arbitrary new marker names and non-JSON arguments without component metadata", () => {
+    const node = dilNode("Before\n\n\uE200new_component\uE202plain text\uE2020\uE201\n\nAfter");
+    const message = apiMessageFromNode(node)!;
+    const block = message.markdown.match(/```json\n([\s\S]*?)\n```/u)!;
+    expect(JSON.parse(block[1]!)).toEqual({type: "new_component", arguments: ["plain text", 0]});
+    expect(message.markdown).toContain("After");
+  });
+  it("preserves unsupported image parameters and API results without losing prose or citations", () => {
+    const message = apiMessageFromNode(unsupportedDilNode())!;
+    const output = renderMarkdown("Fixture", [message], new Set([message.id]));
+    expect(output).toContain("Before[^1]");
+    expect(output).toContain("After[^2]");
+    expect(output.indexOf("Before")).toBeLessThan(output.indexOf("原始组件：image_group"));
+    expect(output.indexOf("原始组件：image_group")).toBeLessThan(output.indexOf("After"));
+    const blocks = [...output.matchAll(/```json\n([\s\S]*?)\n```/gu)].map((block) => JSON.parse(block[1]!));
+    expect(blocks[0]).toEqual({
+      type: "image_group",
+      arguments: [{query: ["industrial storage"], layout: "carousel", num_per_query: 1}],
+    });
+    expect(blocks[1]["photo-component"].state.images[0]).toEqual({
+      title: "Storage tanks", url: "https://example.com/storage",
+      content_url: "https://example.com/full-image.png",
+      original_content_url: "https://example.com/original.jpg",
+    });
+    expect(blocks[1]["citation-component"]).toBeUndefined();
+  });
+  it("preserves unsupported widget reference data instead of failing the conversation", () => {
+    const marker = '\uE200genui\uE202{"custom_widget":{"id":"demo"}}\uE201';
+    const node = dilNode(`Before\n\n${marker}\n\nAfter${cite("turn0search0")}`);
+    const reference = {matched_text: marker, data: {widget_type: "custom_widget", content: {label: "Example", values: [0, -2]}}};
+    node.message!.metadata!.content_references = [reference];
+    const message = apiMessageFromNode(node)!;
+    const blocks = [...message.markdown.matchAll(/```json\n([\s\S]*?)\n```/gu)].map((block) => JSON.parse(block[1]!));
+    expect(blocks[0].reference).toEqual(reference);
+    expect(message.citations).toHaveLength(1);
+  });
+  it("keeps unknown component data literal and excludes it when its message is deselected", () => {
+    const literal = {html: '<svg><text>Raw text</text></svg>', math: '\\(raw\\)', code: '```', marker: cite("missing")};
+    const encoded = JSON.stringify(literal).replace(/[\uE200-\uE202]/gu, (character) => `\\u${character.charCodeAt(0).toString(16)}`);
+    const node = dilNode(`Before\n\n\uE200future_component\uE202${encoded}\uE201\n\nAfter`);
+    const raw = apiMessageFromNode(node)!;
+    const blocks = [...raw.markdown.matchAll(/```json\n([\s\S]*?)\n```/gu)].map((block) => JSON.parse(block[1]!));
+    expect(blocks[0].arguments).toEqual([literal]);
+    const normal = apiMessageFromNode(dilNode("Normal answer"))!;
+    normal.id = "normal";
+    const selected = renderMarkdown("Fixture", [raw, normal], new Set([normal.id]));
+    expect(selected).toContain("Normal answer");
+    expect(selected).not.toContain("future_component");
+  });
+  it("preserves literal unknown markers in code without appending raw component data", () => {
+    const node = unsupportedDilNode();
+    const dil = node.message!.metadata!.model_dil_v2 as {fallbackMarkdown: string};
+    dil.fallbackMarkdown = `Example \`${imageGroupMarker}\`\n\n\`\`\`text\n${imageGroupMarker}\n\`\`\``;
+    const message = apiMessageFromNode(node)!;
+    expect(message.markdown).toContain(imageGroupMarker);
+    expect(message.markdown).not.toContain("组件原始数据");
+    expect(message.markdown).not.toContain("Storage tanks");
+  });
   it("converts SVG figures whose raw JSX has expression attributes", () => {
     const node = dilNode(
       '```svg\n<svg><text stroke-width="2">Value: 0</text></svg>\n```',
@@ -189,10 +249,10 @@ describe("DIL message export", () => {
     expect(message?.citations).toHaveLength(1);
   });
 
-  it("fails on a chart with missing data rather than removing it", () => {
-    expect(() =>
-      apiMessageFromNode(dilNode(`Before ${chartMarker} after`)),
-    ).toThrow();
+  it("preserves chart parameters and references as raw data when they cannot be converted", () => {
+    const missing = apiMessageFromNode(dilNode(`Before ${chartMarker} after`))!;
+    expect(missing.markdown).toContain("原始组件：genui");
+    expect(missing.markdown).toContain('"charts_widget_v2"');
     const node = richDilNode();
     const reference = (
       node.message!.metadata!.content_references as Array<{
@@ -200,7 +260,7 @@ describe("DIL message export", () => {
       }>
     )[0]!;
     reference.data.content.data = [];
-    expect(() => apiMessageFromNode(node)).toThrow();
+    expect(apiMessageFromNode(node)?.markdown).toContain('"data": []');
   });
 
   it("outputs file links when the source supplies an actual URL", () => {
