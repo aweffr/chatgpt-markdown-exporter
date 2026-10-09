@@ -140,6 +140,14 @@ Source modules are bundled into the files loaded by Chrome.
 
 ### Selection controller
 
+- Resolve one current visible workspace from the thread composer. Ignore
+  hidden retained workspaces, not messages merely outside the viewport.
+- Keep composer ownership aligned with the current conversation route during
+  navigation. Mount the entry independently of API completion and remount it
+  when the composer changes, even if the old node remains connected.
+- Scope messages, branch hints and generation status to the same workspace.
+- Discard late request results after navigation, including leave-and-return
+  transitions to the same URL.
 - Match structured messages to currently rendered elements using the normalized
   IDs from the shared page-message reader.
 - Include every exportable message on the active branch, whether or not its DOM
@@ -150,6 +158,25 @@ Source modules are bundled into the files loaded by Chrome.
 
 ### Markdown renderer
 
+- For `metadata.model_dil_v2`, use version-1 `fallbackMarkdown` as the complete
+  body, regardless of DOM mounting. Resolve Cite/FileCite records from the
+  same message's resolved `appData.opGenui.componentResults`.
+- Preserve the position of each source using the shared citation-token
+  protocol. Do not append DIL sources to the message end or export raw parts.
+- Expand explicit DIL url markers as ordinary links and entity markers as
+  their supplied display names; do not invent sources or move links to footnotes.
+- Carry visible preambles (quoted replies and reasoning summaries) separately
+  from DOM body conversion; merge them without duplicating API quotes.
+- Expand `charts_widget_v2` at its exact `matched_text` marker using the
+  supplied title, description, xKey and series order. Prefer formattedData
+  cells, otherwise raw data plus valueSuffix; retain zero, negative and empty
+  cells. Axis ticks describe the drawing, not additional data rows.
+- Convert prose LaTeX delimiters and SVG text labels. Preserve literal fenced
+  and inline code. DIL-generated `svg` fences are figures only when their
+  labels match SVG outside code in raw parts; serialization can change
+  whitespace and camelCase attributes, so do not compare raw strings.
+- Never execute DIL code. Missing required body, source or chart data fails
+  explicitly rather than yielding a known-incomplete download.
 - Accept only the selected, ordered messages.
 - Render deterministic Markdown with no network activity.
 - Re-number and deduplicate citations after message filtering.
@@ -249,6 +276,8 @@ The current page integration uses semantic data attributes:
 - Model fallback: `data-message-model-slug`
 - Conversation turns: `[data-turn-key]`
 - Composer: `form[data-chatgpt-composer] [data-composer-surface-variant]`
+- Workspace: `[data-app-action-timeline-scroll]` containing the active thread
+  composer; its `data-above-composer-conversation-id` owner identifies the chat
 - Citations: `[data-testid="chatgpt-citation"]`; the accessible label provides
   the full source title, while `href` provides the URL
 - Code blocks: `[data-markdown-copy="code-block"] code`
@@ -280,6 +309,8 @@ file.
   inline error.
 - API and DOM extraction both fail: do not create a download.
 - Citation parsing failure: preserve the message and any ordinary usable link.
+- Known DIL conversion failure: show the specific inline error and do not
+  enter selection mode or download a partial document.
 - Model metadata unavailable: omit the model suffix.
 - Download failure: preserve selection state so the user can retry.
 - Route or conversation change: clean up old controls and state.

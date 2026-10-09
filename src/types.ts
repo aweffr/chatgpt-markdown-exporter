@@ -11,6 +11,8 @@ export interface ExportMessage {
   markdown: string;
   citations: CitationSource[];
   model?: string;
+  // Visible additions kept separate from renderer-specific body conversion.
+  preamble?: string[];
 }
 
 export interface ExtractedConversation {

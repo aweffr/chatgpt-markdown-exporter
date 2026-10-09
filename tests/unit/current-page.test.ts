@@ -3,9 +3,41 @@ import {
   extractVisibleConversation,
   visibleBranchHints,
 } from "../../src/dom-extractor";
-import { firstMatch, SELECTORS } from "../../src/selectors";
+import { firstMatch, pageMessages, SELECTORS } from "../../src/selectors";
 
 describe("current ChatGPT page", () => {
+  it("reads only the active workspace, retaining mounted messages outside the viewport", () => {
+    document.body.innerHTML = `
+      <div style="display:none !important">
+        <section data-turn-key="old-user"><div data-chatgpt-search-message-ids="old-user"><div data-user-message-bubble>Old question</div></div></section>
+        <form data-chatgpt-composer><div data-composer-surface-variant="default"></div></form>
+        <button data-testid="stop-button">停止</button>
+      </div>
+      <div data-app-action-timeline-scroll>
+        <section data-turn-key="current-user" style="position:absolute;top:-10000px"><div data-chatgpt-search-message-ids="current-user"><div data-user-message-bubble>Current question</div></div></section>
+        <form data-chatgpt-composer><div data-composer-surface-variant="default"></div></form>
+      </div>`;
+    expect(pageMessages(document).map(({ id }) => id)).toEqual([
+      "current-user",
+    ]);
+    expect(visibleBranchHints(document)).toEqual({
+      visibleMessageIds: ["current-user"],
+      visibleTurnIds: ["current-user"],
+    });
+  });
+
+  it("does not use the previous composer while the new route is mounting", () => {
+    history.replaceState({}, "", "/c/current-conversation");
+    document.body.innerHTML = `<div data-app-action-timeline-scroll>
+      <div data-chatgpt-search-message-ids="old-user"><div data-user-message-bubble>Old question</div></div>
+      <form data-chatgpt-composer><div data-above-composer-conversation-id="chatgpt:old-conversation"></div><div data-composer-surface-variant="default"></div></form>
+    </div>`;
+    try {
+      expect(pageMessages(document)).toEqual([]);
+    } finally {
+      history.replaceState({}, "", "/");
+    }
+  });
   it("extracts message identities, content and branch hints without UI labels", () => {
     document.body.innerHTML = `
       <div data-turn-key="user-1">

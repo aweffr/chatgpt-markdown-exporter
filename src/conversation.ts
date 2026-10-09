@@ -243,6 +243,21 @@ export function completeConversationFromPayload(
       const id = branchMessageId(node) ?? "";
       const api = apiMessageFromNode(node);
       const rendered = visibleById.get(id);
+      if (node.message?.metadata?.model_dil_v2 && api) {
+        const preamble =
+          rendered?.preamble?.filter(
+            (block) => !api.markdown.includes(block),
+          ) ?? [];
+        const model = api.model ?? rendered?.model;
+        return enrichVisibleMessage(
+          {
+            ...api,
+            markdown: [...preamble, api.markdown].join("\n\n"),
+            ...(model ? { model } : {}),
+          },
+          node,
+        );
+      }
       return rendered ? mergeVisibleMessage(rendered, api, node) : api;
     })
     .filter((message): message is ExportMessage => Boolean(message));

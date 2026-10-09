@@ -8,6 +8,7 @@ import {
   visibleBranchHints,
 } from "./dom-extractor";
 import type { ConversationPayload, ExtractedConversation } from "./types";
+import { DilConversionError } from "./dil-message";
 
 const MESSAGE_SOURCE = "chatgpt-markdown-exporter-page-bridge";
 
@@ -128,6 +129,7 @@ export async function loadCurrentConversation(
       source: "api",
     };
   } catch (error) {
+    if (error instanceof DilConversionError) throw error;
     if (!(error instanceof ConversationAlignmentError)) {
       console.info("[ChatGPT Markdown 导出器] 完整对话解析失败", {
         stage: "conversation-parse",

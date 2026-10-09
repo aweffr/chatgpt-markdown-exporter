@@ -101,3 +101,41 @@ FileCite 的 `state` 包含 `refid`、`file_id`、`safe_file_url`、`file_name`�
 - `tests/e2e/fixture-client.ts` 的现有切换动作只改 URL 和标题，不保留/隐藏多个工作区，不能复现当前故障。
 
 这些结果是调研与失败复现，不是适配完成或 E2E 通过的声明。
+
+## 实施中的补充 probe
+
+使用已有登录态，通过 `/api/auth/session` 取 Token 后读取单数会话 API，返回
+HTTP 200。Token 不打印、不落盘。未带 authorization 的对照请求返回 404，
+不能据此误判接口已经失效。
+
+- `formattedData` 实际为 8 行数组，与原始 `data` 逐行对应；单元格已经带 `%`。
+  转换按单元格优先使用该显示值，缺少时使用原始数据与 series 单位。
+- `axes` 给出 y 轴范围和带 `%` 的刻度标签，仅用于图形坐标，不是额外的数据行。
+- 实际 SVG 在 raw parts 中为图形标签；fallbackMarkdown 把它包装成 `svg` fence。
+  序列化去掉排版空白并将 fontSize 等属性改成 kebab-case，但文字标签顺序一致。
+  因此不能无条件保护该 fence，也不能把所有 SVG 代码示例转成图形。
+- 实现用代码区域外 raw SVG 的可读标签识别 fallback 中的同一图形，不执行
+  DIL code。SVG 代码示例与 inline code 仍保持原样。
+- 真实节点仅保存在 Git 忽略目录。本地执行 `apiMessageFromNode` 和最终 renderer：
+  结果 19288 个字符、26 个来源、8 行图表数据，图形标签完整，无未解析控制标记、
+  SVG 源码或 Cite/FileCite/Chart/box/grid 标签。
+
+该核验使用真实 payload，但尚未验证用户重载后的四会话完整 UI/下载流程。
+
+### 实战追加的两种标记
+
+用户重载后，C 的长会话首次导出显示“组件内容尚未支持”，没有产生残缺文件。
+定向读取确认还有 `entity` 标记：字段是 JSON 数组 `[类型, 名称]`，页面正文展示
+名称，Markdown 保留名称即可，不虚构链接。
+
+用户追加样例 E 后，真实正文中另有 `url` 标记，字段依次为显示标题和 URL。
+它是正文中的普通链接，不应改成来源脚注。补充 RED 测试后分别支持这两种标记，
+并将其加入真实扩展使用的合成 fixture；代码区域中的字面量保持原样。
+
+修复后对 C/E 实际 payload 的每条可导出消息进行本地转换：分别 16/9 条，
+无未解析标记。真实文件及 URL 映射仍只保存在 Git 忽略目录。
+
+C 第二次重载后，完整分支能进入 16/16 选择模式，但最终下载暴露来源标题为
+null 的情况。补充 RED 后在 DIL 适配层归一化为空标题，由最终 renderer 使用
+域名显示。之后将 C/E 的实际完整分支跑到最终 Markdown：16/9 条消息、
+45/24 条脚注均成功，无控制标记。此项新增单元与真实扩展 fixture 下载覆盖。

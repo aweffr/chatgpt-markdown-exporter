@@ -4,7 +4,7 @@
 
 **Goal:** 在当前普通 Markdown 与 DIL 回答并存的 ChatGPT 中，输入框右侧持续显示导出按钮；只选择当前会话分支的消息；完整导出正文、原位置引用脚注、公式、图表数据及图片/附件链接。
 
-**Status:** 待实施。当前源码基线 `cd0715a`、版本 `0.3.0`，本轮没有修改产品代码。计划中的新增文件均明确标为“新增”。仓库根目录为 `/Users/aweffr/developer/aweffr/chatgpt-markdown-exporter`，下面命令从此目录执行。
+**Status:** 已在 `dev/dil-renderer` 实施，先以 `7e7c128` 提交本计划及 probe 文档。实施基线 `cd0715a`、版本 `0.3.0`；当前构建 `0.4.0`。Task 1–4 和 fixture E2E 已完成；Task 5 按用户追加要求扩展到五个会话，A/B/D 实际下载已通过，C/E 已补充修复，等待用户第二次重载后复验。仓库根目录为 `/Users/aweffr/developer/aweffr/chatgpt-markdown-exporter`，下面命令从此目录执行。
 
 ## 方案和共享协议
 
@@ -44,8 +44,8 @@
 | 来源字典 | 只使用相同消息的 resolved Cite 记录；组件实例 ID 不是 ref ID，不能按组件顺序或域名配对；来源 URL 和标题遵循现有最终渲染规则 |
 | 文件引用 | filecite ref 对应 `FileCite.state.refid`；有 `safe_file_url` 时输出带文件名的链接，没有时输出 `[附件：文件名]`；有行号则保留为可读范围，不复制内部 snippet |
 | 公式 | 保留 LaTeX；将代码区域外的 `\(...\)` 和 `\[...\]` 分别转换为行内 `$...$` 与块级 `$$...$$`，不得修改代码中的同样字符 |
-| 结构化图表 | 在 genui 标记位置，使用 `content_references` 的精确 matched_text 关联 `charts_widget_v2`；输出标题、描述和数据表，按 xKey、series 顺序保留行与列，保留 label、valueSuffix、零值与负值；无数据的单元格留空 |
-| 内联 SVG 图形 | 转为原图已有的 title/desc/text 等可读内容，保持文本顺序和相邻说明；不内嵌 SVG 或生成图片，不猜测未提供的数值和图形关系 |
+| 结构化图表 | 在 genui 标记位置精确关联 `charts_widget_v2`；按 xKey、series 顺序输出标题、描述及数据表；优先 formattedData 单元格（已经带单位），否则使用 raw data + valueSuffix；保留零值、负值，无值留空 |
+| SVG 图形 | 转为原图已有的 title/desc/text；实测 fallback 将图形包装成 svg fence，只在其标签与 raw parts 代码区域外的 SVG 对应时转换；保留普通 SVG 代码示例，不内嵌图形或猜数值 |
 | 图片与附件 | 沿用现有链接输出；不下载、不内嵌；无真实 URL 的附件保留名称 |
 | 最终文档 | 用户标题为“用户”，模型版本有证据才附加；文件名仍为 `{标题}-YYYY-MM-DD-HH-mm.md`；引用按最终选中内容重新编号、按规范化 URL 去重；无水印与账户信息 |
 
@@ -206,4 +206,30 @@ playwright-cli -s=exporter-dil run-code --filename=tests/e2e/dil-export.js
 
 执行顺序为 Task 1 → Task 2 → Task 3 → Task 4 → Task 5。每个结果完成后核对其 Verify 和 Done when，不因测试代码已经存在就跳过真实浏览器操作。
 
-本计划交付的是工程方案及证据，当前不执行产品实现、重载、提交或推送。实施完成的交付物是 TypeScript 源码、相关回归测试、可重载 `dist` 和上述验证结果。
+用户已授权在开发分支实施。交付物是 TypeScript 源码、回归测试、可重载 `dist` 和验证记录；用户本人重载安装的扩展，本轮不推送远程仓库。
+
+## 执行记录
+
+- RED：工作区与 DIL 初始契约测试 6 项失败，暴露隐藏会话混入、raw parts 优先和来源缺失；补充公式/代码保护测试 2 项失败，再逐项转绿。
+- 定向 probe 确认 formattedData 为与 data 同序的数组，已经包含单位；补充 RED 后实现按单元格优先使用显示值。
+- 真实回答转换 probe 暴露 SVG figure 被包装成代码块；补充 RED 后按 raw parts 中的图形标签识别。新增可见摘要/模型补充测试也先 RED 后 GREEN。
+- `npm test`、`npm run typecheck`、`npm run build`、`npm run build:e2e` 已通过。fixture Playwright CLI 脚本报告 `status: passed`，实际核对 6 个下载文件；涵盖隐藏工作区、返回、延迟挂载、重建、虚拟化、慢请求切换、生成中、API 失败/不匹配、转换失败不下载。
+- 真实 A 的单条回答本地转换核验：26 个来源、8 行图表数据；保留 SVG 文字；无未解析控制标记、SVG 或 DIL 实现标签。此项是实际 payload 转换检查，不是重载后的 UI/下载实战验收。
+- 未取得真实 DIL 代码块或再生成分支样例；代码区域保护由合成 fixture 验证，分支重建由既有 unit 覆盖。四个真实会话的最终下载验收仍待用户重载。
+- 用户在实施过程中新增实战样例 E，最终验收扩展为五个会话。首次实战在 C/E 暴露 entity 与 url 标记，均先新增 RED 用例再修复，并加入 fixture E2E。C/E 实际 payload 全消息转换无残余标记，已生成第二次重载构建。
+- C 第二次重载实战确认完整分支为 16/16；下载暴露 null 来源标题，补充 RED 后归一化并使用域名。C/E 实际完整分支经最终 renderer 成功生成 45/24 个脚注。
+- 当前 `npm test` 为 11 个测试文件、53 个测试全部通过；最新 fixture E2E 核对 7 个实际下载，包含 null 标题和等待旧请求返回后再次导出。
+
+### 第二次重载前的实战结果
+
+| 样例 | 已观察的结果 |
+| --- | --- |
+| A | 当前工作区入口正常；全选 3 条消息下载成功，26 条来源脚注、8 行图表及公式/SVG 标签完整，无残余标记 |
+| B | 全选/全不选计数正确，空选择禁用；全选 5 条消息下载成功，35 条来源脚注 |
+| C | SPA 切换后入口正常；首次下载被 entity 标记明确阻断；已修复，实际 payload 16 条消息转换无残余标记，待 UI 复验 |
+| D | 项目侧栏切换后入口正常；全选 5 条消息下载成功，49 条来源脚注 |
+| E | 追加样例入口正常；首次下载被 url 标记明确阻断；已修复，实际 payload 9 条消息转换无残余标记，待 UI 复验 |
+
+上述三个实际下载无账户信息，均含分钟级文件名与 `.md`。真人会话的逐条取消、
+滚动前后同内容比较及最终返回缓存工作区仍需在第二次重载后完成；不能把自动化
+fixture 的同类通过结果当作已经完成这些真人页面动作。

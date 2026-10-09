@@ -5,7 +5,13 @@ import {
 } from "./conversation-client";
 import { createDownloadRequest, type DownloadResponse } from "./download";
 import { renderMarkdown } from "./markdown";
-import { firstMatch, pageMessages, SELECTORS } from "./selectors";
+import {
+  allMatches,
+  isDisplayed,
+  pageContext,
+  pageMessages,
+  SELECTORS,
+} from "./selectors";
 import { SelectionState } from "./selection-state";
 import type { ExportMessage, ExtractedConversation } from "./types";
 
@@ -98,6 +104,7 @@ async function downloadMarkdown(
 
 class ExporterApp {
   private routeKey = "";
+  private routeVersion = 0;
   private exportHost: HTMLElement | null = null;
   private exportButton: HTMLButtonElement | null = null;
   private exportError: HTMLElement | null = null;
@@ -123,7 +130,10 @@ class ExporterApp {
       subtree: true,
     });
     window.addEventListener("popstate", () => this.syncRoute());
-    window.setInterval(() => this.syncRoute(), 500);
+    window.setInterval(() => {
+      this.syncRoute();
+      this.checkSelectionSurface();
+    }, 500);
   }
 
   private queueSync(): void {
@@ -142,6 +152,7 @@ class ExporterApp {
       ? `${location.origin}/c/${conversationId}`
       : "";
     if (nextRouteKey !== this.routeKey) {
+      this.routeVersion += 1;
       this.exitSelection();
       this.removeExportButton();
       this.routeKey = nextRouteKey;
@@ -153,18 +164,15 @@ class ExporterApp {
       this.removeExportButton();
       return;
     }
-    if (!this.exportHost?.isConnected) this.mountExportButton();
+    const composer = pageContext(document).composer;
+    if (this.exportAnchor !== composer || !this.exportHost?.isConnected) {
+      this.removeExportButton();
+      if (composer) this.mountExportButton(composer);
+    }
     if (currentMessageElements().size > 0) this.prefetchConversation();
   }
 
-  private composerContainer(): HTMLElement | null {
-    const match = firstMatch(document, SELECTORS.composer);
-    return match instanceof HTMLElement ? match : null;
-  }
-
-  private mountExportButton(): void {
-    const composer = this.composerContainer();
-    if (!composer) return;
+  private mountExportButton(composer: HTMLElement): void {
     const { host, root } = createShadowHost("entry");
     root.innerHTML = `
       <style>${buttonStyles()}</style>
@@ -185,6 +193,7 @@ class ExporterApp {
     this.exportHost = host;
     this.exportButton = button;
     this.exportError = error;
+    if (this.selection) button.textContent = "选择中";
   }
 
   private removeExportButton(): void {
@@ -202,10 +211,10 @@ class ExporterApp {
   private ensureConversationLoad(): Promise<LoadConversationResult> {
     if (this.conversationCache) return Promise.resolve(this.conversationCache);
     if (this.conversationLoad) return this.conversationLoad;
-    const routeKey = this.routeKey;
+    const version = this.routeVersion;
     const promise = loadCurrentConversation(document)
       .then((result) => {
-        if (this.routeKey === routeKey) this.conversationCache = result;
+        if (this.routeVersion === version) this.conversationCache = result;
         return result;
       })
       .finally(() => {
@@ -237,7 +246,10 @@ class ExporterApp {
   }
 
   private isGenerating(): boolean {
-    return firstMatch(document, SELECTORS.generating) !== null;
+    const root = pageContext(document).root;
+    return (
+      root !== null && allMatches(root, SELECTORS.generating).some(isDisplayed)
+    );
   }
 
   private async enterSelection(): Promise<void> {
@@ -248,10 +260,12 @@ class ExporterApp {
       return;
     }
     if (!this.exportButton) return;
+    const version = this.routeVersion;
     this.exportButton.disabled = true;
     this.exportButton.textContent = "加载中…";
     try {
       let result = await this.ensureConversationLoad();
+      if (this.routeVersion !== version) return;
       const pageIds = currentMessageElements();
       const conversationIds = new Set(
         result.conversation.messages.map((message) => message.id),
@@ -259,6 +273,7 @@ class ExporterApp {
       if ([...pageIds.keys()].some((id) => !conversationIds.has(id))) {
         this.invalidateConversationLoad();
         result = await this.ensureConversationLoad();
+        if (this.routeVersion !== version) return;
       }
       const messages = result.conversation.messages;
       const refreshedIds = new Set(messages.map((message) => message.id));
@@ -281,6 +296,7 @@ class ExporterApp {
         messageCount: messages.length,
       });
     } catch (error) {
+      if (this.routeVersion !== version) return;
       this.showEntryError(
         error instanceof Error ? error.message : "无法读取当前对话",
       );

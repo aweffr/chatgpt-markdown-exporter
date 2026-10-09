@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
+import { richDilNode } from "../fixtures/dil/message";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 const fixtureHtml = await readFile(
@@ -114,6 +115,41 @@ const server = createServer((request, response) => {
     return;
   }
   if (url.pathname.startsWith("/backend-api/conversation/")) {
+    const payload = structuredClone(branch);
+    if (url.pathname.split("/").at(-1)?.startsWith("dil")) {
+      const node = richDilNode();
+      Object.assign(payload.mapping["assistant-2"], node, {
+        id: "assistant-2",
+        parent: "user-2",
+        message: { ...node.message, id: "assistant-2" },
+      });
+      if (url.pathname.endsWith("/dil-invalid")) {
+        const metadata = payload.mapping["assistant-2"].message
+          .metadata as Record<string, unknown>;
+        delete metadata.content_references;
+      }
+    }
+    if (url.pathname.endsWith("/another-conversation")) {
+      const mapping = Object.fromEntries(
+        Object.values(payload.mapping).map((node) => {
+          const item = node as {
+            id: string;
+            parent: string | null;
+            children: string[];
+            message?: { id: string; content: { parts: string[] } };
+          };
+          if (item.message) item.message.id = `next-${item.message.id}`;
+          item.parent = item.parent ? `next-${item.parent}` : null;
+          item.children = item.children.map((id) => `next-${id}`);
+          item.id = `next-${item.id}`;
+          return [item.id, item];
+        }),
+      );
+      mapping["next-user-1"]!.message!.content.parts = ["新会话的问题"];
+      payload.mapping = mapping as typeof payload.mapping;
+      payload.current_node = "next-assistant-2";
+      payload.title = "另一个测试对话";
+    }
     if (
       url.pathname.endsWith("/api-fail") ||
       request.headers.authorization !== "Bearer fixture-token"
@@ -125,7 +161,7 @@ const server = createServer((request, response) => {
     if (url.pathname.endsWith("/api-slow")) {
       setTimeout(() => {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify(branch));
+        response.end(JSON.stringify(payload));
       }, 2500);
       return;
     }
@@ -144,7 +180,7 @@ const server = createServer((request, response) => {
       );
       return;
     }
-    response.end(JSON.stringify(branch));
+    response.end(JSON.stringify(payload));
     return;
   }
   if (url.pathname === "/" || /(?:^|\/)c\//u.test(url.pathname)) {

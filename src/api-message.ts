@@ -1,4 +1,5 @@
 import { createCitationToken } from "./markdown";
+import { dilMarkdown } from "./dil-message";
 import type {
   CitationSource,
   ConversationNode,
@@ -241,10 +242,17 @@ export function apiMessageFromNode(
   const id = message?.id ?? node.id;
   const content = record(message?.content);
   if (!id || !content) return null;
-  const converted = applyCitations(
-    replaceFilePlaceholders(contentMarkdown(content), metadata),
-    metadata,
-  );
+  const converted = metadata.model_dil_v2
+    ? dilMarkdown(
+        metadata,
+        ((content.parts as unknown[]) ?? [])
+          .filter((part): part is string => typeof part === "string")
+          .join("\n"),
+      )
+    : applyCitations(
+        replaceFilePlaceholders(contentMarkdown(content), metadata),
+        metadata,
+      );
   const quote = targetedReply(metadata);
   const markdown = [quote ? blockquote(quote) : "", converted.markdown]
     .filter(Boolean)

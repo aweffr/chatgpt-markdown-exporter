@@ -101,8 +101,11 @@
       <button type="button" id="rebuild">重建消息区域</button>
       <button type="button" id="older">显示前文</button>
       <button type="button" id="route">切换对话</button>
+      <button type="button" id="back-route">返回原对话</button>
+      <button type="button" id="delayed-route">延迟挂载新对话</button>
       <button type="button" id="generating">模拟正在生成</button>
     </header>
+    <div data-app-action-timeline-scroll id="workspace">
     <main id="conversation">
       <section data-turn-key="user-1" data-testid="conversation-turn-user-1">
         <div class="group/turn-messages">
@@ -224,6 +227,7 @@
         </div>
       </div>
     </form>
+    </div>
     <script src="/fixture-client.js"></script>
   </body>
 </html>

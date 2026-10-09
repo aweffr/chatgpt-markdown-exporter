@@ -1,6 +1,8 @@
 import { createCitationToken } from "./markdown";
 import {
   allMatches,
+  isDisplayed,
+  pageContext,
   pageMessages,
   SELECTORS,
   type PageMessage,
@@ -343,6 +345,7 @@ function extractMessage({
     role,
     markdown,
     citations: context.citations,
+    ...(preamble.length ? { preamble } : {}),
     ...(model ? { model } : {}),
   };
 }
@@ -367,9 +370,13 @@ export function visibleBranchHints(documentNode: Document): {
   visibleMessageIds: string[];
   visibleTurnIds: string[];
 } {
+  const root = pageContext(documentNode).root;
   return {
     visibleMessageIds: pageMessages(documentNode).map(({ id }) => id),
-    visibleTurnIds: allMatches(documentNode, SELECTORS.turns)
+    visibleTurnIds: (root
+      ? allMatches(root, SELECTORS.turns).filter(isDisplayed)
+      : []
+    )
       .map((element) => element.getAttribute("data-turn-key"))
       .filter((id): id is string => Boolean(id)),
   };
