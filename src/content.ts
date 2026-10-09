@@ -104,7 +104,7 @@ async function downloadMarkdown(
 
 class ExporterApp {
   private routeKey = "";
-  private routeVersion = 0;
+  private conversationVersion = 0;
   private exportHost: HTMLElement | null = null;
   private exportButton: HTMLButtonElement | null = null;
   private exportError: HTMLElement | null = null;
@@ -121,6 +121,8 @@ class ExporterApp {
   private exportSelectionButton: HTMLButtonElement | null = null;
   private toolbarError: HTMLElement | null = null;
   private mutationQueued = false;
+  private generating = false;
+  private entering = false;
 
   start(): void {
     this.syncRoute();
@@ -152,7 +154,9 @@ class ExporterApp {
       ? `${location.origin}/c/${conversationId}`
       : "";
     if (nextRouteKey !== this.routeKey) {
-      this.routeVersion += 1;
+      this.conversationVersion += 1;
+      this.entering = false;
+      this.generating = false;
       this.exitSelection();
       this.removeExportButton();
       this.routeKey = nextRouteKey;
@@ -163,6 +167,16 @@ class ExporterApp {
     if (!conversationId) {
       this.removeExportButton();
       return;
+    }
+    const generating = this.isGenerating();
+    if (generating !== this.generating) {
+      this.generating = generating;
+      // The same message ID can change while streaming. Invalidate pending
+      // loads as well as cached bodies, not only the route's message IDs.
+      this.conversationVersion += 1;
+      this.entering = false;
+      this.exitSelection();
+      this.invalidateConversationLoad();
     }
     const composer = pageContext(document).composer;
     if (this.exportAnchor !== composer || !this.exportHost?.isConnected) {
@@ -193,7 +207,17 @@ class ExporterApp {
     this.exportHost = host;
     this.exportButton = button;
     this.exportError = error;
-    if (this.selection) button.textContent = "选择中";
+    this.updateEntryButton();
+  }
+
+  private updateEntryButton(): void {
+    if (!this.exportButton) return;
+    this.exportButton.disabled = this.entering || this.selection !== null;
+    this.exportButton.textContent = this.entering
+      ? "加载中…"
+      : this.selection
+        ? "选择中"
+        : "导出";
   }
 
   private removeExportButton(): void {
@@ -211,10 +235,11 @@ class ExporterApp {
   private ensureConversationLoad(): Promise<LoadConversationResult> {
     if (this.conversationCache) return Promise.resolve(this.conversationCache);
     if (this.conversationLoad) return this.conversationLoad;
-    const version = this.routeVersion;
+    const version = this.conversationVersion;
     const promise = loadCurrentConversation(document)
       .then((result) => {
-        if (this.routeVersion === version) this.conversationCache = result;
+        if (this.conversationVersion === version && this.conversationLoad === promise)
+          this.conversationCache = result;
         return result;
       })
       .finally(() => {
@@ -225,7 +250,11 @@ class ExporterApp {
   }
 
   private prefetchConversation(): void {
-    if (!this.routeKey || this.prefetchedRouteKey === this.routeKey) return;
+    if (
+      !this.routeKey ||
+      this.prefetchedRouteKey === this.routeKey ||
+      this.isGenerating()
+    ) return;
     this.prefetchedRouteKey = this.routeKey;
     void this.ensureConversationLoad().catch((error: unknown) => {
       console.info("[ChatGPT Markdown 导出器] 后台预读取未完成", {
@@ -253,19 +282,21 @@ class ExporterApp {
   }
 
   private async enterSelection(): Promise<void> {
-    if (this.selection) return;
+    this.syncRoute();
+    if (this.selection || this.entering) return;
     this.showEntryError("");
     if (this.isGenerating()) {
       this.showEntryError("回答生成完成后可导出");
       return;
     }
     if (!this.exportButton) return;
-    const version = this.routeVersion;
-    this.exportButton.disabled = true;
-    this.exportButton.textContent = "加载中…";
+    const version = this.conversationVersion;
+    this.entering = true;
+    this.updateEntryButton();
     try {
       let result = await this.ensureConversationLoad();
-      if (this.routeVersion !== version) return;
+      this.syncRoute();
+      if (this.conversationVersion !== version) return;
       const pageIds = currentMessageElements();
       const conversationIds = new Set(
         result.conversation.messages.map((message) => message.id),
@@ -273,7 +304,8 @@ class ExporterApp {
       if ([...pageIds.keys()].some((id) => !conversationIds.has(id))) {
         this.invalidateConversationLoad();
         result = await this.ensureConversationLoad();
-        if (this.routeVersion !== version) return;
+        this.syncRoute();
+        if (this.conversationVersion !== version) return;
       }
       const messages = result.conversation.messages;
       const refreshedIds = new Set(messages.map((message) => message.id));
@@ -289,19 +321,21 @@ class ExporterApp {
       );
       this.mountSelectionControls(messages, pageIds);
       this.mountToolbar();
-      this.exportButton.textContent = "选择中";
       console.info("[ChatGPT Markdown 导出器] 已进入选择模式", {
         stage: "selection-ready",
         source: result.source,
         messageCount: messages.length,
       });
     } catch (error) {
-      if (this.routeVersion !== version) return;
+      if (this.conversationVersion !== version) return;
       this.showEntryError(
         error instanceof Error ? error.message : "无法读取当前对话",
       );
-      this.exportButton.disabled = false;
-      this.exportButton.textContent = "导出";
+    } finally {
+      if (this.conversationVersion === version) {
+        this.entering = false;
+        this.updateEntryButton();
+      }
     }
   }
 
@@ -471,10 +505,7 @@ class ExporterApp {
     this.toolbarError = null;
     this.selection = null;
     this.conversation = null;
-    if (this.exportButton) {
-      this.exportButton.disabled = false;
-      this.exportButton.textContent = "导出";
-    }
+    this.updateEntryButton();
   }
 }
 

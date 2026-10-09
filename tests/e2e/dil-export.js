@@ -281,6 +281,57 @@ async (page) => {
   await page.screenshot({
     path: "test-results/playwright-cli/dil-export-final.png",
   })
+  await open("/c/dil-streaming?generating=1")
+  await entry().click()
+  await page.getByText("回答生成完成后可导出", { exact: true }).waitFor()
+  // Allow the prefetch and the 500 ms generation observer to settle.
+  await page.waitForTimeout(1200)
+  await page.getByRole("button", { name: "模拟正在生成", exact: true }).click()
+  await select()
+  const completed = await download("generation-completed")
+  assert(completed.includes("Completed answer revision 1 with the final conclusion."),
+    "Generation-time prefetch must not truncate the completed answer")
+  assert(!completed.includes("Partial answer."), "Partial answer must not remain cached")
+
+  await open("/c/dil-streaming")
+  await select()
+  const initial = await download("before-regeneration")
+  assert(initial.includes("Completed answer revision 0"), "Initial answer before regeneration")
+  await page.getByRole("button", { name: "模拟正在生成", exact: true }).click()
+  await entry().click()
+  await page.getByText("回答生成完成后可导出", { exact: true }).waitFor()
+  await page.waitForTimeout(600)
+  await page.getByRole("button", { name: "模拟正在生成", exact: true }).click()
+  await select()
+  const regenerated = await download("after-regeneration")
+  assert(regenerated.includes("Completed answer revision 1") && !regenerated.includes("revision 0"),
+    "Same message IDs must not reuse an answer cached before generation")
+
+  await open("/c/dil-streaming-slow")
+  await entry().click()
+  await page.getByRole("button", { name: "加载中…", exact: true }).waitFor()
+  await page.getByRole("button", { name: "模拟正在生成", exact: true }).click()
+  await entry().waitFor()
+  await entry().click()
+  await page.getByText("回答生成完成后可导出", { exact: true }).waitFor()
+  await page.getByRole("button", { name: "模拟正在生成", exact: true }).click()
+  await select()
+  const delayed = await download("generation-with-old-request")
+  assert(delayed.includes("Completed answer revision 1") && !delayed.includes("revision 0"),
+    "Old pending requests cannot restore pre-generation content")
+
+  await open("/c/api-slow")
+  await entry().click()
+  await page.getByRole("button", { name: "加载中…", exact: true }).waitFor()
+  await page.getByRole("button", { name: "重建输入框", exact: true }).click()
+  await page.waitForTimeout(600)
+  await page.getByRole("button", { name: "加载中…", exact: true }).waitFor()
+  assert(await page.getByRole("button", { name: "加载中…", exact: true }).isDisabled(),
+    "Remounted composer must keep the pending entry disabled")
+  await selected(4).waitFor()
+  assert(await page.getByRole("toolbar").count() === 1, "Only one selection toolbar")
+  await page.getByRole("button", { name: "取消", exact: true }).click()
+  assert(await page.getByRole("toolbar").count() === 0, "Cancel removes the entire selection UI")
   await downloads.close()
   return { status: "passed", downloads: results }
 }

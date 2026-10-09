@@ -86,10 +86,12 @@ export function richDilNode(): ConversationNode {
       `\`\`\`svg\n${svg}\n\`\`\``,
       `File ${filecite("turn0file0", "L1-L3")}`,
       "![Picture](https://example.com/image.png)\n[Attachment](https://example.com/report.pdf)",
-      "\uE200url\uE202Official announcement\uE202https://example.com/news\uE201",
+      "Press \\` to switch. \uE200url\uE202Official announcement\uE202https://example.com/news\uE201, then `code`.",
     ].join("\n\n"),
   );
-  node.message!.content!.parts = [`<box>${svg}</box>`];
+  node.message!.content!.parts = [
+    `<box>${svg.replace("<text>", "<text fontSize={12}>")}</box>`,
+  ];
   node.message!.metadata!.content_references = [
     {
       type: "client_defined_widget",

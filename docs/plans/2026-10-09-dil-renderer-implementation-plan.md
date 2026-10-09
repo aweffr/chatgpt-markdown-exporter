@@ -116,7 +116,7 @@
 
 **Protocol / Constraints**
 
-- RED 验证 fallback 正文优先于 raw parts；DIL 消息已经挂载时也不被 DOM 正文覆盖；同一消息移出 DOM 后导出结果不变。
+- RED 验证 fallback 正文优先于 raw parts；DIL 消息已经挂载时也不被 DOM 正文覆盖；同一消息移出 DOM 后规范正文和引用不变。仅来自 DOM 的思考摘要和引用回复是挂载时补充，不属于这个不变量；普通 Markdown 仍沿用 DOM 增强，不能声明其全文与挂载状态无关。
 - RED 验证多来源、重复引用、相同域名不同 URL、同 URL 去重、选择过滤后重编号、缺少来源映射的明确失败，以及 FileCite 无 URL 时保留名称与行号。
 - 在同一消息范围内建立引用索引，按原位置替换 token；文件引用独立于网页脚注，保留现有附件表现。
 - 类型识别和 DIL 转换集中在适配层；维持普通 Markdown 回答现有行为。原有 DOM 补充摘要、targeted reply、模型信息不得造成 DIL 正文重复或脚注搬到末尾。

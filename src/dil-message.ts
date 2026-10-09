@@ -41,12 +41,29 @@ function transformProse(
   transformFence?: (language: string, body: string) => string | undefined,
 ): string {
   const inline = (text: string): string => {
-    const code = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/gu;
+    const delimiters = /`+/gu;
     let offset = 0;
     let result = "";
-    for (const match of text.matchAll(code)) {
-      result += transform(text.slice(offset, match.index)) + match[0];
-      offset = match.index + match[0].length;
+    let opening: RegExpExecArray | null;
+    while ((opening = delimiters.exec(text))) {
+      const backslashes =
+        text.slice(0, opening.index).match(/\\+$/u)?.[0].length ?? 0;
+      if (backslashes % 2 !== 0) continue;
+      // Code spans can contain newlines, but cannot cross a blank paragraph.
+      const rest = text.slice(delimiters.lastIndex);
+      const paragraphEnd = rest.search(/\n[ \t]*\n/u);
+      const paragraph = paragraphEnd < 0 ? rest : rest.slice(0, paragraphEnd);
+      const width = opening[0].length;
+      const closing = [...paragraph.matchAll(/`+/gu)].find(
+        (run) => run[0].length === width,
+      );
+      if (!closing) continue;
+      const after = delimiters.lastIndex + closing.index + closing[0].length;
+      result +=
+        transform(text.slice(offset, opening.index)) +
+        text.slice(opening.index, after);
+      offset = after;
+      delimiters.lastIndex = after;
     }
     return result + transform(text.slice(offset));
   };
@@ -118,6 +135,10 @@ function svgText(svg: string): string {
   const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
   if (parsed.querySelector("parsererror"))
     throw new DilConversionError("图形文本无法解析");
+  return svgLabels(parsed);
+}
+
+function svgLabels(parsed: Document): string {
   return [...parsed.querySelectorAll("title, desc, text")]
     .map((element) => element.textContent?.replace(/\s+/gu, " ").trim())
     .filter(Boolean)
@@ -145,8 +166,14 @@ export function dilMarkdown(
   // figures from literal code; text labels survive JSX-to-SVG serialization.
   const renderedFigures = new Set<string>();
   transformProse(rawParts, (prose) => {
-    for (const match of prose.matchAll(/<svg\b[^>]*>[\s\S]*?<\/svg>/giu))
-      renderedFigures.add(svgText(match[0]));
+    for (const match of prose.matchAll(/<svg\b[^>]*>[\s\S]*?<\/svg>/giu)) {
+      // Raw parts are JSX, so expression attributes are not valid XML. Only
+      // read literal labels here; the serialized fallback remains strict SVG.
+      const text = svgLabels(
+        new DOMParser().parseFromString(match[0], "text/html"),
+      );
+      if (text) renderedFigures.add(text);
+    }
     return prose;
   });
   const components = Object.values(

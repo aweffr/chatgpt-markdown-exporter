@@ -67,15 +67,31 @@ document.querySelector("#back-route")?.addEventListener("click", () => {
   if (old) old.style.display = "";
 });
 
-document.querySelector("#generating")?.addEventListener("click", () => {
+function toggleGenerating(): void {
   const existing = document.querySelector('[data-testid="stop-button"]');
   if (existing) {
     existing.remove();
+    document.cookie = "fixtureGenerating=0; path=/";
+    const revision = Number(document.cookie.match(/fixtureRevision=(\d+)/u)?.[1] ?? 0);
+    document.cookie = `fixtureRevision=${revision + 1}; path=/`;
     return;
   }
+  document.cookie = "fixtureGenerating=1; path=/";
   const stopButton = document.createElement("button");
   stopButton.type = "button";
   stopButton.dataset.testid = "stop-button";
   stopButton.textContent = "停止生成";
   document.querySelector("form > div")?.append(stopButton);
+}
+
+document.cookie = "fixtureGenerating=0; path=/";
+document.cookie = "fixtureRevision=0; path=/";
+if (new URLSearchParams(location.search).has("generating")) toggleGenerating();
+document.querySelector("#generating")?.addEventListener("click", toggleGenerating);
+
+document.querySelector("#remount-composer")?.addEventListener("click", () => {
+  const template = document.createElement("template");
+  template.innerHTML = workspaceMarkup;
+  const form = template.content.querySelector("form")!;
+  document.querySelector("#workspace form")?.replaceWith(form);
 });

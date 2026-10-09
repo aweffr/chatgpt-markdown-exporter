@@ -167,6 +167,8 @@ Source modules are bundled into the files loaded by Chrome.
   their supplied display names; do not invent sources or move links to footnotes.
 - Carry visible preambles (quoted replies and reasoning summaries) separately
   from DOM body conversion; merge them without duplicating API quotes.
+  DOM-only preambles are supplementary and available only while mounted;
+  canonical DIL body and citations remain independent of DOM mounting.
 - Expand `charts_widget_v2` at its exact `matched_text` marker using the
   supplied title, description, xKey and series order. Prefer formattedData
   cells, otherwise raw data plus valueSuffix; retain zero, negative and empty
@@ -175,6 +177,8 @@ Source modules are bundled into the files loaded by Chrome.
   and inline code. DIL-generated `svg` fences are figures only when their
   labels match SVG outside code in raw parts; serialization can change
   whitespace and camelCase attributes, so do not compare raw strings.
+  Raw JSX label discovery accepts expression attributes; fallback SVG parsing
+  remains strict. Textless SVG fences stay literal, never match an empty label.
 - Never execute DIL code. Missing required body, source or chart data fails
   explicitly rather than yielding a known-incomplete download.
 - Accept only the selected, ordered messages.

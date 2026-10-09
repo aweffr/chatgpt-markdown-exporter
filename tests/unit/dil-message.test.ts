@@ -12,6 +12,47 @@ import {
 } from "../fixtures/dil/message";
 
 describe("DIL message export", () => {
+  it("converts SVG figures whose raw JSX has expression attributes", () => {
+    const node = dilNode(
+      '```svg\n<svg><text stroke-width="2">Value: 0</text></svg>\n```',
+    );
+    node.message!.content!.parts = [
+      '<svg><text strokeWidth={2}>Value: 0</text></svg>',
+    ];
+    expect(apiMessageFromNode(node)?.markdown).toBe("Value: 0");
+  });
+  it("does not erase textless SVG code examples when a textless figure exists", () => {
+    const example = '```svg\n<svg><circle r="5"/></svg>\n```';
+    const node = dilNode(`Figure\n\n${example}`);
+    node.message!.content!.parts = ['<svg><rect width="10"/></svg>'];
+    expect(apiMessageFromNode(node)?.markdown).toContain(example);
+  });
+  it("converts sources after escaped backticks and across paragraph boundaries", () => {
+    const url = "\uE200url\uE202News\uE202https://example.com/news\uE201";
+    for (const prefix of ["Press \\` to switch. ", "Press \\` to switch.\n\n", "An unmatched ` here.\n\n"]) {
+      const node = dilNode(
+        `${prefix}Conclusion ${url}${cite("turn0search0")}, then \`code\`.`,
+      );
+      const message = apiMessageFromNode(node)!;
+      expect(message.markdown).toContain("[News](https://example.com/news)");
+      expect(message.markdown).toContain("`code`");
+      expect(message.citations).toHaveLength(1);
+      expect(message.markdown).not.toMatch(/[\uE200-\uE202]/u);
+    }
+  });
+  it("respects even backslashes before code and escaped backticks inside code", () => {
+    const marker = cite("turn0search0");
+    const node = dilNode('Code \\\\`' + marker + '\\` and prose ' + marker + '.');
+    const message = apiMessageFromNode(node)!;
+    expect(message.markdown).toContain("`" + marker + "\\`");
+    expect(message.citations).toHaveLength(1);
+  });
+  it("preserves multiline inline code within one paragraph", () => {
+    const literal = `\`\`${cite("missing")}\n\`single tick\` \`\``;
+    const message = apiMessageFromNode(dilNode(`${literal} then ${cite("turn0search0")}`))!;
+    expect(message.markdown).toContain(literal);
+    expect(message.citations).toHaveLength(1);
+  });
   it("renders sources with null titles using the hostname", () => {
     const message = apiMessageFromNode(
       dilNode(`Body${cite("turn0search0")}`, null),
@@ -194,7 +235,7 @@ describe("DIL message export", () => {
     expect(output).not.toContain("<Cite");
   });
 
-  it("keeps a DIL answer unchanged whether or not its DOM is mounted", () => {
+  it("keeps the canonical DIL body and citations independent of DOM mounting without extra preambles", () => {
     const node = dilNode(`Actual body${cite("turn0search0")}`);
     const payload = {
       current_node: "dil-answer",

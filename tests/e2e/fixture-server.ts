@@ -123,6 +123,14 @@ const server = createServer((request, response) => {
         parent: "user-2",
         message: { ...node.message, id: "assistant-2" },
       });
+      if (url.pathname.includes("dil-streaming")) {
+        const metadata = node.message!.metadata as unknown as {
+          model_dil_v2: { fallbackMarkdown: string };
+        };
+        metadata.model_dil_v2.fallbackMarkdown = request.headers.cookie?.includes("fixtureGenerating=1")
+          ? "Partial answer."
+          : `Completed answer revision ${request.headers.cookie?.match(/fixtureRevision=(\d+)/u)?.[1] ?? "0"} with the final conclusion.`;
+      }
       if (url.pathname.endsWith("/dil-invalid")) {
         const metadata = payload.mapping["assistant-2"].message
           .metadata as Record<string, unknown>;
@@ -158,7 +166,7 @@ const server = createServer((request, response) => {
       response.end();
       return;
     }
-    if (url.pathname.endsWith("/api-slow")) {
+    if (url.pathname.endsWith("/api-slow") || url.pathname.endsWith("/dil-streaming-slow")) {
       setTimeout(() => {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify(payload));
